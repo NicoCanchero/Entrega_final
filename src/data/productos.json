@@ -1,19 +1,5 @@
 [
   {
-    "id": 28,
-    "title": "TEST2",
-    "description": "Descripción del nuevo producto",
-    "code": "NP001",
-    "price": 100,
-    "status": true,
-    "stock": 50,
-    "category": "TEST2",
-    "thumbnails": [
-      "https://example.com/image1.jpg",
-      "https://example.com/image2.jpg"
-    ]
-  },
-  {
     "id": 41,
     "title": "TEST3",
     "description": "Descripción del nuevo producto",
@@ -36,6 +22,36 @@
     "status": true,
     "stock": 50,
     "category": "Categoría 1",
-    "thumbnails": ["https://example.com/image.jpg"]
+    "thumbnails": [
+      "https://example.com/image.jpg"
+    ]
+  },
+  {
+    "id": 4,
+    "title": "TEST2",
+    "description": "Descripción del nuevo producto",
+    "code": "NP001",
+    "price": 200,
+    "status": true,
+    "stock": 30,
+    "category": "Categoría 1",
+    "thumbnails": [
+      "https://example.com/image1.jpg",
+      "https://example.com/image2.jpg"
+    ]
+  },
+  {
+    "id": 7,
+    "title": "TEST3",
+    "description": "Descripción del nuevo producto",
+    "code": "NP001",
+    "price": 200,
+    "status": true,
+    "stock": 30,
+    "category": "Categoría 2",
+    "thumbnails": [
+      "https://example.com/image1.jpg",
+      "https://example.com/image2.jpg"
+    ]
   }
 ]
