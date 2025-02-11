@@ -1,0 +1,33 @@
+<h1>Productos en Tiempo Real</h1>
+
+{{#if products.length}}
+  <ul id="productList">
+    {{#each products}}
+      <li>
+        <h2>{{this.title}}</h2>
+        <p>{{this.description}}</p>
+        <p>Precio: ${{this.price}}</p>
+        <p>Stock: {{this.stock}}</p>
+        {{#each this.thumbnails}}
+          <img src="{{this}}" alt="Imagen del producto" />
+        {{/each}}
+      </li>
+    {{/each}}
+  </ul>
+{{else}}
+  <p>No hay productos disponibles.</p>
+{{/if}}
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  // Establecer la conexión WebSocket const socket = io(); // Escuchar el evento
+  "productos" para actualizar la lista de productos socket.on("productos",
+  (products) => { console.log("Productos recibidos desde el servidor:",
+  products); const productList = document.getElementById("productList");
+  productList.innerHTML = ""; // Limpiar la lista actual // Añadir los nuevos
+  productos a la lista products.forEach((product) => { const li =
+  document.createElement("li"); li.innerHTML = ` <h2>${product.title}</h2>
+  <p>${product.description}</p> <p>Precio: $${product.price}</p> <p>Stock:
+  ${product.stock}</p> <img src="${product.thumbnails[0]}" alt="Imagen del
+  producto" /> `; productList.appendChild(li); }); });
+</script>

@@ -42,6 +42,12 @@ router.post("/", (req, res) => {
   res.status(201).json(newCart);
 });
 
+// Ruta GET para obtener todos los carritos
+router.get("/", (req, res) => {
+  const carts = readFile(cartsFilePath);
+  res.json(carts);
+});
+
 router.get("/:cid", (req, res) => {
   const { cid } = req.params;
   const carts = readFile(cartsFilePath);
