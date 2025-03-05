@@ -6,92 +6,211 @@ import __dirname from "./utils.js";
 import { Server } from "socket.io";
 import fs from "fs";
 import path from "path";
+import mongoose from "mongoose";
+import Product from "./models/product-model.js";
 
 const app = express();
 
+// Register the 'eq' helper when creating the Handlebars instance
+const hbs = handlebars.create({
+  helpers: {
+    eq: (a, b) => a === b,
+  },
+  runtimeOptions: {
+    allowProtoPropertiesByDefault: true, // Disable prototype property checks
+  },
+});
+
+// Middleware for JSON and URL-encoded data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Static files for public directory
 app.use(express.static(__dirname + "/public"));
 
-app.engine("handlebars", handlebars.engine());
+// Set up Handlebars as the view engine
+app.engine("handlebars", hbs.engine); // Use hbs.engine here
 app.set("view engine", "handlebars");
 app.set("views", __dirname + "/views");
 
+// Define the port
 const PORT = 8080;
 
+// Ping route to test server status
 app.use("/ping", (req, res) => {
-  res.json({ message: "Pong!" });
+  res.send("Pong!");
 });
 
-// Definición de rutas
-app.use("/api/cart", cartsRouter); // Carritos
-app.use("/api/product", productsRouter); // Productos
+// MongoDB connection to Atlas
+mongoose
+  .connect(
+    "mongodb+srv://nicocanchero:XE8pXR8TfZbP7pmK@codercluster.v7vzd.mongodb.net/",
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      dbName: "Final", // Specify the database name (optional if default)
+    }
+  )
+  .then(() => {
+    console.log("Connected to MongoDB Atlas");
+  })
+  .catch((error) => {
+    console.error("Error connecting to MongoDB Atlas:", error);
+  });
 
-// Ruta para la vista de productos
-app.get("/", (req, res) => {
-  const products = readProductsFromFile();
-  console.log(products);
-  res.render("home", { products });
-});
+// Defining routes
+app.use("/api/carts", cartsRouter); // Carritos
+app.use("/api/products", productsRouter); // Productos
 
-app.get("/realtimeproducts", (req, res) => {
-  const products = readProductsFromFile();
-  res.render("realTimeProducts", { products });
-});
+// Route for rendering products from MongoDB (Handlebars view)
+app.get("/", async (req, res) => {
+  const { limit = 10, page = 1, sort = "asc", query = "" } = req.query;
 
-const httpServer = app.listen(PORT, () => {
-  console.log(`Servidor escuchando en http://localhost:${PORT}`);
-});
+  const options = {
+    limit: parseInt(limit),
+    skip: (parseInt(page) - 1) * parseInt(limit),
+    sort: { price: sort === "asc" ? 1 : -1 },
+  };
 
-const socketServer = new Server(httpServer);
-
-const readProductsFromFile = () => {
-  const productsFilePath = path.resolve(__dirname, "data", "productos.json");
   try {
-    const data = fs.readFileSync(productsFilePath, "utf-8");
-    return JSON.parse(data);
+    let filter = {};
+
+    if (query) {
+      filter = { category: query }; // Modify this to add more filtering conditions
+    }
+
+    const products = await Product.find(filter, null, options); // Fetch products with filters, pagination, and sorting
+    console.log(products);
+
+    const hasPrevPage = page > 1;
+    const hasNextPage = products.length === limit;
+    const prevLink = hasPrevPage
+      ? `/api/products?page=${
+          page - 1
+        }&limit=${limit}&sort=${sort}&query=${query}`
+      : null;
+    const nextLink = hasNextPage
+      ? `/api/products?page=${
+          parseInt(page) + 1
+        }&limit=${limit}&sort=${sort}&query=${query}`
+      : null;
+
+    res.render("home", {
+      products,
+      hasPrevPage,
+      hasNextPage,
+      prevLink,
+      nextLink,
+    });
   } catch (error) {
-    console.error("Error leyendo el archivo de productos:", error);
-    return [];
+    console.error("Error fetching products:", error);
+    res.render("home", { products: [] }); // In case of error, render an empty list
   }
-};
+});
 
-const writeProductsToFile = (products) => {
-  const productsFilePath = path.resolve(
-    __dirname,
-    "src",
-    "data",
-    "productos.json"
-  );
-  fs.writeFileSync(
-    productsFilePath,
-    JSON.stringify(products, null, 2),
-    "utf-8"
-  );
-};
+// Route to render a single product's details page
+app.get("/products/:pid", async (req, res) => {
+  const { pid } = req.params;
 
-// Conexión WebSocket
-socketServer.on("connection", (socket) => {
-  console.log("Nuevo cliente conectado");
+  try {
+    // Use .lean() to get plain JavaScript objects
+    const product = await Product.findById(pid).lean();
 
-  socket.emit("productos", readProductsFromFile());
+    if (!product) {
+      return res.status(404).send("Producto no encontrado");
+    }
 
-  socket.on("agregarProducto", (producto) => {
-    const products = readProductsFromFile();
-    products.push(producto);
-    writeProductsToFile(products);
-    socketServer.emit("productos", products);
-  });
+    // Render the details page for the product, using product
+    res.render("productDetail", { product });
+  } catch (error) {
+    console.error("Error fetching product details:", error);
+    res.status(500).send("Error fetching product details");
+  }
+});
 
-  socket.on("eliminarProducto", (idProducto) => {
-    let products = readProductsFromFile();
-    products = products.filter((prod) => prod.id !== idProducto);
-    writeProductsToFile(products);
-    socketServer.emit("productos", products);
-  });
+// Route for real-time products (Handlebars view)
+app.get("/realtimeproducts", async (req, res) => {
+  try {
+    const products = await Product.find(); // Fetch all products from MongoDB
+    res.render("realTimeProducts", { products });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    res.render("realTimeProducts", { products: [] }); // In case of error, render an empty list
+  }
+});
 
-  socket.on("disconnect", () => {
-    console.log("Usuario desconectado");
-  });
+// Route for API to fetch products with pagination, sorting, and filtering
+app.get("/api/products", async (req, res) => {
+  const {
+    limit = 10,
+    page = 1,
+    sort = "asc",
+    query = "",
+    availability,
+  } = req.query;
+
+  const options = {
+    limit: parseInt(limit),
+    skip: (parseInt(page) - 1) * parseInt(limit),
+    sort: { price: sort === "asc" ? 1 : -1 }, // Sorting by price, ascending or descending
+  };
+
+  try {
+    let filter = {};
+
+    if (query) {
+      filter = { category: query }; // Filter by category if 'query' is provided
+    }
+
+    if (availability) {
+      filter.status = availability === "true" ? "active" : "inactive"; // Filter by availability if 'availability' is provided
+    }
+
+    // Fetch products with the given filter, pagination, and sorting
+    const products = await Product.find(filter, null, options);
+
+    // Get total count of products to calculate totalPages
+    const totalProducts = await Product.countDocuments(filter);
+
+    const totalPages = Math.ceil(totalProducts / parseInt(limit));
+    const hasPrevPage = parseInt(page) > 1;
+    const hasNextPage = products.length === parseInt(limit);
+
+    const prevLink = hasPrevPage
+      ? `/api/products?page=${
+          parseInt(page) - 1
+        }&limit=${limit}&sort=${sort}&query=${query}&availability=${availability}`
+      : null;
+
+    const nextLink = hasNextPage
+      ? `/api/products?page=${
+          parseInt(page) + 1
+        }&limit=${limit}&sort=${sort}&query=${query}&availability=${availability}`
+      : null;
+
+    // Send the response in the required format
+    res.json({
+      status: "success",
+      payload: products,
+      totalPages,
+      prevPage: hasPrevPage ? parseInt(page) - 1 : null,
+      nextPage: hasNextPage ? parseInt(page) + 1 : null,
+      page: parseInt(page),
+      hasPrevPage,
+      hasNextPage,
+      prevLink,
+      nextLink,
+    });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Error fetching products",
+    });
+  }
+});
+
+// Start the HTTP server
+const httpServer = app.listen(PORT, () => {
+  console.log(`Server is listening on http://localhost:${PORT}`);
 });

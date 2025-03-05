@@ -1,54 +1,40 @@
 import { Router } from "express";
-import fs from "fs";
-import path from "path";
+import mongoose from "mongoose";
+import Product from "../models/product-model.js"; // Correct default import
 const router = new Router();
 
-const __dirname = path.resolve();
-
-const productsFilePath = path.resolve(
-  __dirname,
-  "src",
-  "data",
-  "productos.json"
-);
-
-const readFile = (filePath) => {
+// GET all products
+router.get("/", async (req, res) => {
   try {
-    const data = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(data);
+    const products = await Product.find(); // Fetch all products from MongoDB
+    res.json(products);
   } catch (error) {
-    return [];
+    res.status(500).json({ error: "Error fetching products" });
   }
-};
-
-const writeFile = (filePath, data) => {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-};
-
-router.get("/", (req, res) => {
-  const products = readFile(productsFilePath);
-  res.json(products);
 });
 
-router.get("/:pid", (req, res) => {
+// GET a single product by ID
+router.get("/:pid", async (req, res) => {
   const { pid } = req.params;
-  const products = readFile(productsFilePath);
-  const product = products.find((prod) => prod.id === parseInt(pid));
-
-  if (!product) {
-    return res.status(404).json({ error: "Producto no encontrado" });
+  try {
+    const product = await Product.findById(pid); // Find a product by ID
+    if (!product) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching the product" });
   }
-
-  res.json(product);
 });
 
-router.post("/", (req, res) => {
+// POST a new product
+router.post("/", async (req, res) => {
   const {
     title,
     description,
     code,
     price,
-    status = true,
+    status = "active",
     stock,
     category,
     thumbnails = [],
@@ -58,25 +44,27 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "Faltan campos obligatorios" });
   }
 
-  const products = readFile(productsFilePath);
-  const newProduct = {
-    id: Math.floor(Math.random() * 100), //id unico
-    title,
-    description,
-    code,
-    price,
-    status,
-    stock,
-    category,
-    thumbnails,
-  };
+  try {
+    const newProduct = new Product({
+      title,
+      description,
+      code,
+      price,
+      status,
+      stock,
+      category,
+      thumbnails,
+    });
 
-  products.push(newProduct);
-  writeFile(productsFilePath, products);
-  res.status(201).json(newProduct);
+    const savedProduct = await newProduct.save(); // Save the new product in MongoDB
+    res.status(201).json(savedProduct);
+  } catch (error) {
+    res.status(500).json({ error: "Error saving the product" });
+  }
 });
 
-router.put("/:pid", (req, res) => {
+// PUT (update) a product by ID
+router.put("/:pid", async (req, res) => {
   const { pid } = req.params;
   const {
     title,
@@ -89,43 +77,38 @@ router.put("/:pid", (req, res) => {
     thumbnails,
   } = req.body;
 
-  const products = readFile(productsFilePath);
-  const index = products.findIndex((prod) => prod.id === parseInt(pid));
+  try {
+    const updatedProduct = await Product.findByIdAndUpdate(
+      pid,
+      { title, description, code, price, status, stock, category, thumbnails },
+      { new: true } // This returns the updated document
+    );
 
-  if (index === -1) {
-    return res.status(404).json({ error: "Producto no encontrado" });
+    if (!updatedProduct) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    res.json(updatedProduct);
+  } catch (error) {
+    res.status(500).json({ error: "Error updating the product" });
   }
-
-  const updatedProduct = {
-    ...products[index],
-    title,
-    description,
-    code,
-    price,
-    status,
-    stock,
-    category,
-    thumbnails,
-  };
-
-  products[index] = updatedProduct;
-  writeFile(productsFilePath, products);
-  res.json(updatedProduct);
 });
 
-router.delete("/:pid", (req, res) => {
+// DELETE a product by ID
+router.delete("/:pid", async (req, res) => {
   const { pid } = req.params;
-  let products = readFile(productsFilePath);
 
-  const productIndex = products.findIndex((prod) => prod.id === parseInt(pid));
+  try {
+    const deletedProduct = await Product.findByIdAndDelete(pid);
 
-  if (productIndex === -1) {
-    return res.status(404).json({ error: "Producto no encontrado" });
+    if (!deletedProduct) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    res.status(200).json({ message: "Producto eliminado correctamente" });
+  } catch (error) {
+    res.status(500).json({ error: "Error deleting the product" });
   }
-
-  products = products.filter((prod) => prod.id !== parseInt(pid));
-  writeFile(productsFilePath, products);
-  res.status(200).json({ message: "Producto eliminado correctamente" });
 });
 
 export default router;
